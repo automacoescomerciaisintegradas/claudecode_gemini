@@ -1,0 +1,101 @@
+{
+  "name": "multi-agent-framework",
+  "version": "1.0.0",
+  "description": "Framework Autônomo de Codificação Multi-Agente - Planeja, constrói e valida software",
+  "main": "apps/frontend/dist/main.js",
+  "scripts": {
+    "install:all": "npm install && cd apps/backend && pip install -r requirements.txt",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "cd apps/frontend && npm run dev",
+    "dev:backend": "cd apps/backend && python spec_runner.py",
+    "start": "electron .",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd apps/frontend && npm run build",
+    "build:backend": "cd apps/backend && python -m py_compile .",
+    "package": "electron-builder",
+    "package:win": "electron-builder --win",
+    "package:mac": "electron-builder --mac",
+    "package:linux": "electron-builder --linux",
+    "lint": "eslint apps/frontend/src --ext .ts,.tsx",
+    "test": "cd apps/frontend && npm test",
+    "test:backend": "cd apps/backend && pytest",
+    "clean": "rimraf dist apps/frontend/dist apps/backend/.worktrees apps/backend/results"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/automacoescomerciaisintegradas/multi-agent-framework.git"
+  },
+  "keywords": [
+    "multi-agent",
+    "autonomous",
+    "coding",
+    "ai",
+    "automation",
+    "claude",
+    "electron"
+  ],
+  "author": "",
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/automacoescomerciaisintegradas/multi-agent-framework/issues"
+  },
+  "homepage": "https://github.com/automacoescomerciaisintegradas/multi-agent-framework#readme",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "postcss": "^8.4.32",
+    "rimraf": "^5.0.5",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vite-plugin-electron": "^0.28.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^0.1.0",
+    "@xterm/xterm": "^5.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.0",
+    "zustand": "^4.4.7",
+    "axios": "^1.6.2",
+    "date-fns": "^3.0.6",
+    "lucide-react": "^0.303.0",
+    "uuid": "^9.0.1"
+  },
+  "build": {
+    "appId": "com.multiagent.framework",
+    "productName": "Multi-Agent Framework",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "apps/frontend/dist/**/*",
+      "apps/backend/**/*",
+      "run.py",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg", "zip"],
+      "icon": "apps/frontend/icons/icon.icns"
+    },
+    "win": {
+      "target": ["nsis", "zip"],
+      "icon": "apps/frontend/icons/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development",
+      "icon": "apps/frontend/icons"
+    }
+  }
+}
