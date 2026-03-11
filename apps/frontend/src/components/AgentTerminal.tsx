@@ -69,7 +69,37 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({ sessionId, onClose
       term.writeln(`${color}${line.content}${reset}`);
     });
 
-    // Listener para novo output
+    // WebSocket - Conectar ao backend
+    const ws = new WebSocket(`ws://localhost:8000/ws/terminal/${sessionId}`);
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      addTerminalLine(sessionId, {
+        type: data.type,
+        content: data.content
+      });
+    };
+
+    ws.onopen = () => {
+      addTerminalLine(sessionId, { type: 'system', content: '>>> Conexão estabelecida com o servidor de agentes.' });
+    };
+
+    ws.onerror = () => {
+      addTerminalLine(sessionId, { type: 'error', content: '>>> Erro na conexão com o servidor.' });
+    };
+
+    ws.onclose = () => {
+      addTerminalLine(sessionId, { type: 'system', content: '>>> Conexão encerrada.' });
+    };
+
+    // Handler para entrada do usuário (digitação)
+    term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // Listener para novo output no store (para atualizar o xterm)
     const unsubscribe = useAppStore.subscribe(
       (state) => state.terminalSessions[sessionId],
       (newSession) => {
@@ -78,9 +108,16 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({ sessionId, onClose
           if (lastLine) {
             const color = lastLine.type === 'error' ? '\x1b[31m' : 
                           lastLine.type === 'input' ? '\x1b[36m' : 
-                          lastLine.type === 'system' ? '\x1b[33m' : '';
+                          lastLine.type === 'system' ? '\x1b[33m' : 
+                          lastLine.type === 'success' ? '\x1b[32m' : '';
             const reset = '\x1b[0m';
-            terminalInstance.current.writeln(`${color}${lastLine.content}${reset}`);
+            
+            // Para inputs (echo), usamos write para não pular linha
+            if (lastLine.type === 'input') {
+              terminalInstance.current.write(`${color}${lastLine.content}${reset}`);
+            } else {
+              terminalInstance.current.writeln(`${color}${lastLine.content}${reset}`);
+            }
           }
         }
       }
@@ -92,10 +129,11 @@ export const AgentTerminal: React.FC<AgentTerminalProps> = ({ sessionId, onClose
 
     return () => {
       unsubscribe();
+      ws.close();
       window.removeEventListener('resize', handleResize);
       term.dispose();
     };
-  }, [sessionId, session]);
+  }, [sessionId, session, addTerminalLine]);
 
   useEffect(() => {
     if (fitAddon.current) {

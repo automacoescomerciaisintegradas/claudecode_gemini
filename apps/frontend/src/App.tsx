@@ -1,79 +1,92 @@
-import React, { useState } from 'react';
-import { Sidebar } from './Sidebar';
-import { KanbanBoard } from './KanbanBoard';
-import { AgentTerminals } from './AgentTerminals';
-import { AgentsView } from './AgentsView';
-import { CreateTaskModal } from './CreateTaskModal';
-import { TaskDetailPanel } from './TaskDetailPanel';
-import { useAppStore } from '../store/appStore';
-
-type View = 'kanban' | 'terminals' | 'agents' | 'insights' | 'git' | 'settings';
+import React from 'react';
+import { Sidebar } from './components/Sidebar';
+import { KanbanBoard } from './components/KanbanBoard';
+import { AgentTerminals } from './components/AgentTerminals';
+import { AgentsView } from './components/AgentsView';
+import { CreateTaskModal } from './components/CreateTaskModal';
+import { TaskDetailPanel } from './components/TaskDetailPanel';
+import { useAppStore } from './store/appStore';
+import { useTheme } from './theme';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from './lib/utils';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>('kanban');
-  const { isCreatingTask, selectedTaskId } = useAppStore();
+  const { isCreatingTask, selectedTaskId, setCreatingTask, setSelectedTask, currentView, setCurrentView } = useAppStore();
+  const { theme, mode } = useTheme();
 
   const renderView = () => {
-    switch (currentView) {
-      case 'kanban':
-        return <KanbanBoard />;
-      case 'terminals':
-        return <AgentTerminals />;
-      case 'agents':
-        return <AgentsView />;
-      case 'insights':
-        return (
-          <div className="h-full flex items-center justify-center bg-dark-900 text-gray-400">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold mb-2">Em Desenvolvimento</h2>
-              <p className="text-sm">A visão de Insights estará disponível em breve</p>
-            </div>
-          </div>
-        );
-      case 'git':
-        return (
-          <div className="h-full flex items-center justify-center bg-dark-900 text-gray-400">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold mb-2">Em Desenvolvimento</h2>
-              <p className="text-sm">A visão de Git estará disponível em breve</p>
-            </div>
-          </div>
-        );
-      case 'settings':
-        return (
-          <div className="h-full flex items-center justify-center bg-dark-900 text-gray-400">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold mb-2">Em Desenvolvimento</h2>
-              <p className="text-sm">As configurações estarão disponíveis em breve</p>
-            </div>
-          </div>
-        );
-      default:
-        return <KanbanBoard />;
-    }
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentView}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="h-full w-full"
+        >
+          {(() => {
+            switch (currentView) {
+              case 'kanban':
+                return <KanbanBoard />;
+              case 'terminals':
+                return <AgentTerminals />;
+              case 'agents':
+                return <AgentsView />;
+              case 'insights':
+              case 'git':
+              case 'settings':
+                return (
+                  <div className="h-full flex items-center justify-center bg-dark-900 text-gray-400">
+                    <div className="text-center space-y-4">
+                      <div className="w-16 h-16 bg-dark-800 rounded-2xl border border-dark-700 flex items-center justify-center mx-auto animate-pulse">
+                         <div className="w-8 h-8 bg-primary-500/20 rounded-full" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Em Desenvolvimento</h2>
+                        <p className="text-sm font-medium text-gray-500">A visão de {currentView} estará disponível em breve</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              default:
+                return <KanbanBoard />;
+            }
+          })()}
+        </motion.div>
+      </AnimatePresence>
+    );
   };
 
   return (
-    <div className="flex h-screen bg-dark-900 overflow-hidden">
-      {/* Sidebar */}
+    <div className={cn(
+      "flex h-screen overflow-hidden transition-colors duration-500",
+      mode === 'dark' ? "bg-dark-950 text-white" : "bg-gray-50 text-dark-900",
+      `theme-${theme}`
+    )}>
+      {/* Sidebar - Navigation */}
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden">
-        {renderView()}
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 relative">
+        <div className="flex-1 overflow-hidden relative">
+           {renderView()}
+        </div>
       </main>
 
-      {/* Modals */}
-      {isCreatingTask && (
-        <CreateTaskModal onClose={() => useAppStore.getState().setCreatingTask(false)} />
-      )}
+      {/* Modals & Overlays */}
+      <AnimatePresence>
+        {isCreatingTask && (
+          <CreateTaskModal onClose={() => setCreatingTask(false)} />
+        )}
 
-      {selectedTaskId && (
-        <TaskDetailPanel
-          taskId={selectedTaskId}
-          onClose={() => useAppStore.getState().setSelectedTask(undefined)}
-        />
-      )}
+        {selectedTaskId && (
+          <TaskDetailPanel
+            taskId={selectedTaskId}
+            onClose={() => setSelectedTask(undefined)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

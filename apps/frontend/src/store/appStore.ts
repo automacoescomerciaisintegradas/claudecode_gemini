@@ -14,6 +14,49 @@ export const KANBAN_COLUMNS = [
   { id: 'failed', title: 'Falhados', status: 'failed' as TaskStatus, color: 'bg-red-500', icon: '❌' },
 ];
 
+const INITIAL_AGENTS: Record<string, Agent> = {
+  'planning-id': {
+    id: 'planning-id',
+    name: 'Planning Agent',
+    type: 'planning',
+    state: 'idle',
+    createdAt: new Date().toISOString(),
+    history: [],
+  },
+  'coding-id': {
+    id: 'coding-id',
+    name: 'Coding Agent',
+    type: 'coding',
+    state: 'idle',
+    createdAt: new Date().toISOString(),
+    history: [],
+  },
+  'qa-id': {
+    id: 'qa-id',
+    name: 'QA Agent',
+    type: 'qa',
+    state: 'idle',
+    createdAt: new Date().toISOString(),
+    history: [],
+  },
+  'merge-id': {
+    id: 'merge-id',
+    name: 'Merge Agent',
+    type: 'merge',
+    state: 'idle',
+    createdAt: new Date().toISOString(),
+    history: [],
+  },
+  'lara-id': {
+    id: 'lara-id',
+    name: 'Lara ExecAssist',
+    type: 'executive' as any,
+    state: 'idle',
+    createdAt: new Date().toISOString(),
+    history: [],
+  },
+};
+
 interface AppState {
   // Tasks
   tasks: Record<string, Task>;
@@ -36,6 +79,7 @@ interface AppState {
   selectedTaskId?: string;
   isCreatingTask: boolean;
   sidebarOpen: boolean;
+  currentView: 'kanban' | 'terminals' | 'agents' | 'insights' | 'git' | 'settings';
   
   // Actions
   addTask: (task: Partial<Task>) => string;
@@ -63,14 +107,15 @@ interface AppState {
   setSelectedTask: (id: string | undefined) => void;
   setCreatingTask: (isCreating: boolean) => void;
   toggleSidebar: () => void;
+  setCurrentView: (view: 'kanban' | 'terminals' | 'agents' | 'insights' | 'git' | 'settings') => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   // Initial State
   tasks: {},
   taskIds: [],
-  agents: {},
-  agentIds: [],
+  agents: INITIAL_AGENTS,
+  agentIds: Object.keys(INITIAL_AGENTS),
   terminalSessions: {},
   terminalSessionIds: [],
   activeTerminalId: undefined,
@@ -79,6 +124,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedTaskId: undefined,
   isCreatingTask: false,
   sidebarOpen: true,
+  currentView: 'kanban',
   
   // Task Actions
   addTask: (taskData) => {
@@ -157,7 +203,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   
   // Agent Actions
   addAgent: (agentData) => {
-    const id = uuidv4();
+    const id = agentData.id || uuidv4();
     const now = format(new Date(), "yyyy-MM-dd'T'HH:mm:ss");
     
     const agent: Agent = {
@@ -303,5 +349,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   
   toggleSidebar: () => {
     set((state) => ({ sidebarOpen: !state.sidebarOpen }));
+  },
+  
+  setCurrentView: (view: 'kanban' | 'terminals' | 'agents' | 'insights' | 'git' | 'settings') => {
+    set({ currentView: view });
   },
 }));

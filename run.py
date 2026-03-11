@@ -7,10 +7,18 @@ o framework multi-agente de forma autônoma.
 """
 import asyncio
 import sys
+import os
 import json
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
+
+# Garantir UTF-8 no Windows para emojis no terminal
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 import click
 from rich.console import Console
 from rich.live import Live
@@ -269,4 +277,11 @@ def config():
 
 
 if __name__ == "__main__":
-    cli()
+    try:
+        cli()
+    except Exception as e:
+        if "charmap" in str(e):
+            # Fallback para terminais legados Windows se io.TextIOWrapper falhar
+            os.environ["PYTHONIOENCODING"] = "utf-8"
+            print(f"Erro de encoding detectado. Tente rodar: set PYTHONIOENCODING=utf-8 && python {sys.argv[0]}")
+        raise e

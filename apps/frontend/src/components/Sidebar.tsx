@@ -10,6 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { ThemeSelector } from '../theme/ThemeSelector';
+import { cn } from '../lib/utils';
+import { motion } from 'framer-motion';
 
 interface SidebarProps {
   currentView: string;
@@ -32,81 +35,131 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) =
   ];
 
   return (
-    <div
-      className={`h-full bg-dark-900 border-r border-dark-700 transition-all duration-300 ${
-        sidebarOpen ? 'w-64' : 'w-16'
-      }`}
+    <motion.div
+      initial={false}
+      animate={{ width: sidebarOpen ? 256 : 64 }}
+      className={cn(
+        "h-full bg-dark-900 border-r border-dark-700 flex flex-col z-30 transition-colors duration-300",
+        "shadow-[10px_0_30px_rgba(0,0,0,0.3)]"
+      )}
     >
-      <div className="flex flex-col h-full">
-        {/* Logo */}
-        <div className="p-4 border-b border-dark-700 flex items-center justify-between">
+      <div className="flex flex-col h-full overflow-hidden">
+        {/* Logo Section */}
+        <div className="p-4 border-b border-dark-700 flex items-center justify-between h-[73px]">
           {sidebarOpen && (
-            <div className="flex items-center gap-2">
-              <Cpu className="w-6 h-6 text-primary-400" />
-              <span className="font-bold text-white">Multi-Agent</span>
-            </div>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center gap-3 overflow-hidden"
+            >
+              <div className="p-1.5 bg-primary-600 rounded-lg shadow-lg shadow-primary-900/20">
+                <Cpu className="w-6 h-6 text-white" />
+              </div>
+              <span className="font-black text-xl text-white tracking-tighter uppercase">
+                Cleudo<span className="text-primary-500">Code</span>
+              </span>
+            </motion.div>
           )}
-          <button
-            onClick={toggleSidebar}
-            className="p-2 hover:bg-dark-700 rounded-lg transition-colors"
-          >
-            {sidebarOpen ? (
-              <ChevronLeft className="w-4 h-4 text-gray-400" />
-            ) : (
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            )}
-          </button>
+          {!sidebarOpen && (
+             <div className="mx-auto p-1.5 bg-primary-600 rounded-lg shadow-lg shadow-primary-900/20">
+                <Cpu className="w-5 h-5 text-white" />
+             </div>
+          )}
         </div>
 
-        {/* Menu */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {/* Menu Navigation */}
+        <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto no-scrollbar pt-6">
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onViewChange(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+              className={cn(
+                "group w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all relative overflow-hidden",
                 currentView === item.id
-                  ? 'bg-primary-600/20 text-primary-400'
-                  : 'text-gray-400 hover:bg-dark-700 hover:text-white'
-              }`}
+                  ? 'bg-primary-600/10 text-primary-400'
+                  : 'text-gray-500 hover:bg-dark-800 hover:text-white'
+              )}
             >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
+              {currentView === item.id && (
+                <motion.div 
+                  layoutId="sidebar-active"
+                  className="absolute left-0 w-1 h-6 bg-primary-500 rounded-r-full"
+                />
+              )}
+              
+              <item.icon className={cn(
+                "w-5 h-5 flex-shrink-0 transition-transform duration-300",
+                currentView === item.id ? "scale-110" : "group-hover:scale-110"
+              )} />
+              
               {sidebarOpen && (
-                <>
-                  <span className="flex-1 text-left text-sm">{item.label}</span>
-                  {item.badge !== null && item.badge !== undefined && (
-                    <span className="bg-dark-700 text-gray-400 text-xs px-2 py-0.5 rounded-full">
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex flex-1 items-center justify-between overflow-hidden"
+                >
+                  <span className="text-sm font-bold tracking-tight">{item.label}</span>
+                  {item.badge !== null && item.badge > 0 && (
+                    <span className="bg-primary-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md min-w-[20px] text-center">
                       {item.badge}
                     </span>
                   )}
-                </>
+                </motion.div>
               )}
             </button>
           ))}
         </nav>
 
-        {/* Status */}
-        {sidebarOpen && (
-          <div className="p-4 border-t border-dark-700">
-            <div className="bg-dark-800 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">Agentes Ativos</span>
-                <span className="text-white font-medium">{activeAgents}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">Tarefas</span>
-                <span className="text-white font-medium">{taskCount}</span>
-              </div>
-              <div className="pt-2 border-t border-dark-700">
-                <div className="flex items-center gap-2 text-xs">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-gray-400">Sistema Online</span>
-                </div>
-              </div>
-            </div>
+        {/* Theme & Status Section */}
+        <div className="p-4 border-t border-dark-700 bg-dark-950/20 space-y-4">
+          <div className={cn("flex items-center", sidebarOpen ? "justify-between" : "justify-center")}>
+            <ThemeSelector />
+            {sidebarOpen && (
+              <button
+                onClick={toggleSidebar}
+                className="p-2 hover:bg-dark-700 rounded-lg text-gray-500 hover:text-white transition-colors"
+                title="Fechar Sidebar"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
           </div>
-        )}
+
+          {!sidebarOpen && (
+            <button
+              onClick={toggleSidebar}
+              className="mx-auto p-2 hover:bg-dark-700 rounded-lg text-gray-500 hover:text-white transition-colors flex"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
+
+          {sidebarOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-dark-800/50 border border-dark-700 rounded-xl p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                <span className="text-gray-500 uppercase">Status do Sistema</span>
+                <span className="text-green-500 flex items-center gap-1">
+                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                   Online
+                </span>
+              </div>
+              <div className="h-1 w-full bg-dark-700 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 1.5 }}
+                  className="h-full bg-gradient-to-r from-primary-600 to-primary-400" 
+                />
+              </div>
+            </motion.div>
+          )}
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
+

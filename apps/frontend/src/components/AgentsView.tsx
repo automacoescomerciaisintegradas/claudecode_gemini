@@ -3,7 +3,20 @@ import { useAppStore } from '../store/appStore';
 import { Cpu, Activity, Clock, CheckCircle } from 'lucide-react';
 
 export const AgentsView: React.FC = () => {
-  const { agents, agentIds } = useAppStore();
+  const { agents, agentIds, addTerminalSession, setCurrentView } = useAppStore();
+
+  const handleAgentClick = (agentId: string) => {
+    const agent = agents[agentId];
+    if (agent) {
+      addTerminalSession({
+        agentId: agent.id,
+        agentName: agent.name,
+        isActive: true,
+      });
+      // Switch to terminals view
+      setCurrentView('terminals');
+    }
+  };
 
   const getAgentColor = (state: string) => {
     const colors: Record<string, string> = {
@@ -26,6 +39,7 @@ export const AgentsView: React.FC = () => {
       qa: '🔍',
       merge: '🔀',
       orchestrator: '🎯',
+      executive: '👸',
     };
     return icons[type] || '🤖';
   };
@@ -114,7 +128,8 @@ export const AgentsView: React.FC = () => {
           return (
             <div
               key={agentId}
-              className="bg-dark-800 rounded-xl p-4 border border-dark-700 hover:border-dark-600 transition-colors"
+              onClick={() => handleAgentClick(agentId)}
+              className="bg-dark-800 rounded-xl p-4 border border-dark-700 hover:border-primary-500 transition-colors cursor-pointer"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">

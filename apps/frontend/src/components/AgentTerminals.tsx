@@ -8,7 +8,14 @@ interface AgentTerminalsProps {
 }
 
 export const AgentTerminals: React.FC<AgentTerminalsProps> = ({ className = '' }) => {
-  const { terminalSessionIds, getTerminalSession, activeTerminalId, setActiveTerminal, addTerminalSession } = useAppStore();
+  const { 
+    terminalSessionIds, 
+    getTerminalSession, 
+    activeTerminalId, 
+    setActiveTerminal, 
+    addTerminalSession,
+    removeTerminalSession
+  } = useAppStore();
 
   const handleAddTerminal = () => {
     const { agents } = useAppStore.getState();
@@ -32,7 +39,7 @@ export const AgentTerminals: React.FC<AgentTerminalsProps> = ({ className = '' }
 
   const handleCloseAll = () => {
     terminalSessionIds.forEach((id) => {
-      // removeTerminalSession(id);
+       removeTerminalSession(id);
     });
   };
 
@@ -93,7 +100,10 @@ export const AgentTerminals: React.FC<AgentTerminalsProps> = ({ className = '' }
                   }`}
                   onClick={() => setActiveTerminal(sessionId)}
                 >
-                  <AgentTerminal sessionId={sessionId} />
+                  <AgentTerminal 
+                    sessionId={sessionId} 
+                    onClose={() => removeTerminalSession(sessionId)} 
+                  />
                 </div>
               );
             })}

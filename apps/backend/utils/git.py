@@ -1,351 +1,181 @@
 """
-Utilitários Git para gerenciamento de worktrees e branches.
+Utility Functions for Agent System
+===================================
+
+Helper functions for git operations, plan management, and file syncing.
 """
-import subprocess
+
+import json
+import logging
+import shutil
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
-from datetime import datetime
+
+from core.git_executable import run_git
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class WorktreeInfo:
-    """Informações sobre um worktree."""
-    path: Path
-    branch: str
-    is_current: bool
-    head: str
+def get_latest_commit(project_dir: Path) -> str | None:
+    """Get the hash of the latest git commit."""
+    result = run_git(
+        ["rev-parse", "HEAD"],
+        cwd=project_dir,
+        timeout=10,
+    )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    return None
 
 
-class GitManager:
-    """
-    Gerenciador de operações Git.
-    
-    Fornece utilitários para criação e gerenciamento de worktrees
-    isolados para cada tarefa.
-    """
-    
-    def __init__(self, repo_path: Optional[Path] = None):
-        self.repo_path = repo_path or Path.cwd()
-    
-    def is_git_repo(self) -> bool:
-        """Verifica se o diretório é um repositório git."""
-        git_dir = self.repo_path / ".git"
-        return git_dir.exists()
-    
-    def get_current_branch(self) -> str:
-        """Retorna a branch atual."""
+def get_commit_count(project_dir: Path) -> int:
+    """Get the total number of commits."""
+    result = run_git(
+        ["rev-list", "--count", "HEAD"],
+        cwd=project_dir,
+        timeout=10,
+    )
+    if result.returncode == 0:
         try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            return result.stdout.strip()
-        except Exception:
-            return "unknown"
-    
-    def get_main_branch(self) -> str:
-        """Retorna a branch principal (main ou master)."""
-        branches = ["main", "master"]
-        for branch in branches:
-            try:
-                result = subprocess.run(
-                    ["git", "rev-parse", "--verify", branch],
-                    capture_output=True,
-                    text=True,
-                    cwd=self.repo_path,
-                )
-                if result.returncode == 0:
-                    return branch
-            except Exception:
+            return int(result.stdout.strip())
+        except ValueError:
+            return 0
+    return 0
+
+
+def load_implementation_plan(spec_dir: Path) -> dict | None:
+    """Load the implementation plan JSON."""
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return None
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def find_subtask_in_plan(plan: dict, subtask_id: str) -> dict | None:
+    """Find a subtask by ID in the plan."""
+    for phase in plan.get("phases", []):
+        for subtask in phase.get("subtasks", []):
+            if subtask.get("id") == subtask_id:
+                return subtask
+    return None
+
+
+def find_phase_for_subtask(plan: dict, subtask_id: str) -> dict | None:
+    """Find the phase containing a subtask."""
+    for phase in plan.get("phases", []):
+        for subtask in phase.get("subtasks", []):
+            if subtask.get("id") == subtask_id:
+                return phase
+    return None
+
+
+def sync_spec_to_source(spec_dir: Path, source_spec_dir: Path | None) -> bool:
+    """
+    Sync ALL spec files from worktree back to source spec directory.
+
+    When running in isolated mode (worktrees), the agent creates and updates
+    many files inside the worktree's spec directory. This function syncs ALL
+    of them back to the main project's spec directory.
+
+    IMPORTANT: Since .auto-claude/ is gitignored, this sync happens to the
+    local filesystem regardless of what branch the user is on. The worktree
+    may be on a different branch (e.g., auto-claude/093-task), but the sync
+    target is always the main project's .auto-claude/specs/ directory.
+
+    Files synced (all files in spec directory):
+    - implementation_plan.json - Task status and subtask completion
+    - build-progress.txt - Session-by-session progress notes
+    - task_logs.json - Execution logs
+    - review_state.json - QA review state
+    - critique_report.json - Spec critique findings
+    - suggested_commit_message.txt - Commit suggestions
+    - REGRESSION_TEST_REPORT.md - Test regression report
+    - spec.md, context.json, etc. - Original spec files (for completeness)
+    - memory/ directory - Codebase map, patterns, gotchas, session insights
+
+    Args:
+        spec_dir: Current spec directory (inside worktree)
+        source_spec_dir: Original spec directory in main project (outside worktree)
+
+    Returns:
+        True if sync was performed, False if not needed or failed
+    """
+    # Skip if no source specified or same path (not in worktree mode)
+    if not source_spec_dir:
+        return False
+
+    # Resolve paths and check if they're different
+    spec_dir_resolved = spec_dir.resolve()
+    source_spec_dir_resolved = source_spec_dir.resolve()
+
+    if spec_dir_resolved == source_spec_dir_resolved:
+        return False  # Same directory, no sync needed
+
+    synced_any = False
+
+    # Ensure source directory exists
+    source_spec_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # Sync all files and directories from worktree spec to source spec
+        for item in spec_dir.iterdir():
+            # Skip symlinks to prevent path traversal attacks
+            if item.is_symlink():
+                logger.warning(f"Skipping symlink during sync: {item.name}")
                 continue
-        return "main"
-    
-    def create_worktree(
-        self,
-        branch_name: str,
-        worktree_path: Path,
-        base_branch: Optional[str] = None,
-    ) -> bool:
-        """
-        Cria um worktree isolado para uma tarefa.
-        
-        Args:
-            branch_name: Nome da branch para o worktree.
-            worktree_path: Caminho onde o worktree será criado.
-            base_branch: Branch base para o worktree (padrão: main).
-            
-        Returns:
-            True se sucesso, False caso contrário.
-        """
-        base_branch = base_branch or self.get_main_branch()
-        
-        try:
-            # Criar branch e worktree
-            cmd = [
-                "git", "worktree", "add",
-                "-b", branch_name,
-                str(worktree_path),
-                base_branch,
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
+
+            source_item = source_spec_dir / item.name
+
+            if item.is_file():
+                # Copy file (preserves timestamps)
+                shutil.copy2(item, source_item)
+                logger.debug(f"Synced {item.name} to source")
+                synced_any = True
+
+            elif item.is_dir():
+                # Recursively sync directory
+                _sync_directory(item, source_item)
+                synced_any = True
+
+    except Exception as e:
+        logger.warning(f"Failed to sync spec directory to source: {e}")
+
+    return synced_any
+
+
+def _sync_directory(source_dir: Path, target_dir: Path) -> None:
+    """
+    Recursively sync a directory from source to target.
+
+    Args:
+        source_dir: Source directory (in worktree)
+        target_dir: Target directory (in main project)
+    """
+    # Create target directory if needed
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for item in source_dir.iterdir():
+        # Skip symlinks to prevent path traversal attacks
+        if item.is_symlink():
+            logger.warning(
+                f"Skipping symlink during sync: {source_dir.name}/{item.name}"
             )
-            
-            return result.returncode == 0
-            
-        except Exception:
-            return False
-    
-    def remove_worktree(self, worktree_path: Path, force: bool = False) -> bool:
-        """Remove um worktree."""
-        try:
-            cmd = ["git", "worktree", "remove"]
-            if force:
-                cmd.append("-f")
-            cmd.append(str(worktree_path))
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            return result.returncode == 0
-            
-        except Exception:
-            return False
-    
-    def list_worktrees(self) -> List[WorktreeInfo]:
-        """Lista todos os worktrees."""
-        worktrees = []
-        
-        try:
-            result = subprocess.run(
-                ["git", "worktree", "list", "--porcelain"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            if result.returncode == 0:
-                current_worktree = None
-                
-                for line in result.stdout.split("\n"):
-                    if line.startswith("worktree "):
-                        if current_worktree:
-                            worktrees.append(current_worktree)
-                        current_worktree = WorktreeInfo(
-                            path=Path(line.split(" ", 1)[1]),
-                            branch="",
-                            is_current=False,
-                            head="",
-                        )
-                    elif line.startswith("branch ") and current_worktree:
-                        current_worktree.branch = line.split(" ", 1)[1]
-                    elif line.startswith("HEAD ") and current_worktree:
-                        current_worktree.head = line.split(" ", 1)[1]
-                    elif line.startswith("current") and current_worktree:
-                        current_worktree.is_current = True
-                
-                if current_worktree:
-                    worktrees.append(current_worktree)
-            
-        except Exception:
-            pass
-        
-        return worktrees
-    
-    def create_branch(
-        self,
-        branch_name: str,
-        base_branch: Optional[str] = None,
-        start_point: Optional[str] = None,
-    ) -> bool:
-        """Cria uma nova branch."""
-        base_branch = base_branch or self.get_main_branch()
-        
-        try:
-            cmd = ["git", "checkout", "-b", branch_name, base_branch]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            return result.returncode == 0
-            
-        except Exception:
-            return False
-    
-    def checkout_branch(self, branch_name: str) -> bool:
-        """Faz checkout de uma branch."""
-        try:
-            result = subprocess.run(
-                ["git", "checkout", branch_name],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
-    
-    def commit_changes(
-        self,
-        message: str,
-        files: Optional[List[str]] = None,
-        all_files: bool = False,
-    ) -> bool:
-        """Faz commit das mudanças."""
-        try:
-            # Stage files
-            if all_files:
-                subprocess.run(
-                    ["git", "add", "-A"],
-                    capture_output=True,
-                    cwd=self.repo_path,
-                )
-            elif files:
-                for file in files:
-                    subprocess.run(
-                        ["git", "add", file],
-                        capture_output=True,
-                        cwd=self.repo_path,
-                    )
-            
-            # Commit
-            result = subprocess.run(
-                ["git", "commit", "-m", message],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            return result.returncode == 0
-            
-        except Exception:
-            return False
-    
-    def push_branch(self, branch_name: str, remote: str = "origin") -> bool:
-        """Push de uma branch para o remote."""
-        try:
-            result = subprocess.run(
-                ["git", "push", "-u", remote, branch_name],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
-    
-    def get_diff(self, branch1: str, branch2: str) -> str:
-        """Retorna o diff entre duas branches."""
-        try:
-            result = subprocess.run(
-                ["git", "diff", f"{branch1}..{branch2}"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            return result.stdout
-        except Exception:
-            return ""
-    
-    def get_changed_files(
-        self,
-        branch1: str,
-        branch2: str,
-    ) -> List[str]:
-        """Retorna lista de arquivos modificados entre branches."""
-        try:
-            result = subprocess.run(
-                ["git", "diff", "--name-only", f"{branch1}..{branch2}"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            return result.stdout.strip().split("\n") if result.stdout.strip() else []
-        except Exception:
-            return []
-    
-    def has_conflicts(self, branch_name: str) -> bool:
-        """Verifica se há conflitos no merge."""
-        try:
-            # Tentar merge dry-run
-            result = subprocess.run(
-                ["git", "merge", "--no-commit", "--no-ff", branch_name],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            # Abortar merge
-            subprocess.run(
-                ["git", "merge", "--abort"],
-                capture_output=True,
-                cwd=self.repo_path,
-            )
-            
-            return "conflict" in result.stdout.lower() or result.returncode != 0
-            
-        except Exception:
-            return False
-    
-    def get_status(self) -> Dict[str, Any]:
-        """Retorna status do repositório."""
-        status = {
-            "branch": self.get_current_branch(),
-            "is_clean": True,
-            "uncommitted_files": [],
-            "ahead_behind": {"ahead": 0, "behind": 0},
-        }
-        
-        try:
-            # Verificar se há mudanças não commitadas
-            result = subprocess.run(
-                ["git", "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            if result.stdout.strip():
-                status["is_clean"] = False
-                status["uncommitted_files"] = [
-                    line.split()[1] 
-                    for line in result.stdout.strip().split("\n")
-                    if line.strip()
-                ]
-            
-            # Verificar ahead/behind
-            main_branch = self.get_main_branch()
-            result = subprocess.run(
-                ["git", "rev-list", "--left-right", "--count", f"{main_branch}...HEAD"],
-                capture_output=True,
-                text=True,
-                cwd=self.repo_path,
-            )
-            
-            if result.returncode == 0 and result.stdout.strip():
-                parts = result.stdout.strip().split()
-                if len(parts) == 2:
-                    status["ahead_behind"] = {
-                        "ahead": int(parts[0]),
-                        "behind": int(parts[1]),
-                    }
-            
-        except Exception:
-            pass
-        
-        return status
+            continue
+
+        target_item = target_dir / item.name
+
+        if item.is_file():
+            shutil.copy2(item, target_item)
+            logger.debug(f"Synced {source_dir.name}/{item.name} to source")
+        elif item.is_dir():
+            # Recurse into subdirectories
+            _sync_directory(item, target_item)
+
+
+# Keep the old name as an alias for backward compatibility
+def sync_plan_to_source(spec_dir: Path, source_spec_dir: Path | None) -> bool:
+    """Alias for sync_spec_to_source for backward compatibility."""
+    return sync_spec_to_source(spec_dir, source_spec_dir)

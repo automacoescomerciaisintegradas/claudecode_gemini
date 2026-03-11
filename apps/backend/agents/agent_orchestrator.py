@@ -12,6 +12,7 @@ from .planning_agent import PlanningAgent
 from .coding_agent import CodingAgent
 from .qa_agent import QAAgent
 from .merge_agent import MergeAgent
+from .lara_agent import LaraAgent
 
 
 class AgentOrchestrator:
@@ -39,6 +40,7 @@ class AgentOrchestrator:
         self.agents["coding"] = CodingAgent()
         self.agents["qa"] = QAAgent()
         self.agents["merge"] = MergeAgent()
+        self.agents["executive"] = LaraAgent()
     
     async def execute_task(self, context: TaskContext) -> AgentResult:
         """
